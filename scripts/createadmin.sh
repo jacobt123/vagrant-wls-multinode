@@ -39,11 +39,11 @@ EOF
 
 function create_adminSetup()
 {
-	mkdir -p $DOMAIN_PATH
+#	mkdir -p $DOMAIN_PATH
 
-	echo "created doamin directory $DOMAIN_PATH"
+#	echo "created doamin directory $DOMAIN_PATH"
 
-	unzip -o $BASE_DIR/weblogic-deploy.zip -d $DOMAIN_PATH
+#	unzip -o $BASE_DIR/weblogic-deploy.zip -d $DOMAIN_PATH
 	create_admin_model
 	chown -R $username:$groupname $DOMAIN_PATH
 	runuser -l oracle -c ". $oracleHome/oracle_common/common/bin/setWlstEnv.sh; $DOMAIN_PATH/weblogic-deploy/bin/createDomain.sh -oracle_home $oracleHome -domain_parent $DOMAIN_PATH  -domain_type WLS -model_file $DOMAIN_PATH/admin-domain.yaml"
@@ -191,7 +191,7 @@ groupname="oracle"
 wlsDomainName="clusterDomain"
 wlsUserName="system"
 wlsPassword="gumby1234"
-wlsServerName="adminserver"
+wlsServerName="admin"
 wlsAdminHost=$ADMINURL
 oracleHome="/u01/app/wls/install/oracle/middleware/oracle_home"
 wlsAdminPort=7001

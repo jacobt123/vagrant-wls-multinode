@@ -8,18 +8,18 @@ opts = GetoptLong.new(
     ["--nodes", GetoptLong::OPTIONAL_ARGUMENT]
 )
 
-numberOfNodes=3
+numberOfNodes=0
 
 opts.ordering=(GetoptLong::REQUIRE_ORDER)
 
 opts.each do |opt, arg|
   case opt
-    when '--nodes'
+    when '--nodes' || '-n'
       numberOfNodes= Integer(arg)
   end
-  print "\n"
-  print "Number of Nodes , #{numberOfNodes}"
-  print "\n"
+  puts "\n"
+  puts "Number of Nodes , #{numberOfNodes}"
+  puts "\n"
 end
 
 
@@ -31,6 +31,7 @@ BOX_IMAGE = "oraclelinux/7"
 BOX_URL = "https://oracle.github.io/vagrant-projects/boxes/oraclelinux/7.json"
 NODE_COUNT=numberOfNodes 
 var_user_name ="Jacob"
+var_ms_port=7701
 shiphomeurl="http://download.oracle.com/otn/nt/middleware/12c/12213/fmw_12.2.1.3.0_wls_Disk1_1of1.zip"
 jdkurl="https://download.oracle.com/otn/java/jdk/8u131-b11/d54c1d3a095b4ff2b6607d096fa80163/jdk-8u131-linux-x64.tar.gz"
 wlsversion="12.2.1.4.0"
@@ -39,7 +40,7 @@ jdkversion="jdk1.8.0_251"
 
 Vagrant.configure("2") do |config|
 
-
+no_proxy_list =""
 
 
 if Vagrant.has_plugin?("vagrant-proxyconf")
@@ -71,6 +72,7 @@ subconfig.vm.box_url = BOX_URL
 #subconfig.name ="admin"
 subconfig.vm.hostname = "admin"
 subconfig.vm.network :private_network, ip: "10.0.0.10"
+subconfig.vm.network "forwarded_port", guest: 7001, host: 7001
 subconfig.vm.provision "shell", inline: <<-SHELL
     echo "H E L L O     W O R L D ============> ADMIN NODE"    
     SHELL
@@ -91,17 +93,27 @@ config.vm.define "managed#{i}" do |subconfig|
     echo "H E L L O     W O R L D ==========> MANAGED NODE"
     echo "H E L L O     W O R L D  #{i}" 
     SHELL
+    subconfig.vm.provision "shell", path: "scripts/createmanaged.sh", env: {
+	"ADMINHOST"        => "10.0.0.10",
+        "MANAGEDSERVER"    => "managed#{i}",
+        "MANAGEDSERVERPORT"=> var_ms_port   
+    }
 end
+var_ms_port = var_ms_port.next
 end
 
 config.vm.provision "shell", inline: <<-SHELL
     echo "Hello World"
     cat >> /etc/motd << EOF
-*******************************************************
-**                 Hello there,                      **
-**      Welcome to a VM that was customized with     **
-**            the vagrant shell provisioner          **
-*******************************************************
+***************************************************************
+This VM provides a pre-installed Oracle Home with 
+            WebLogic Server and JDK
+
+ORACLE_HOME /u01/app/wls/install/oracle/middleware/oracle_home
+JAVA_HOME   /u01/app/jdk
+DOMAIN_HOME /u01/domains/
+Switch to user oracle : sudo su - oracle
+***************************************************************
 EOF
 SHELL
 

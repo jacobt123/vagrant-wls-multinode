@@ -4,10 +4,10 @@ set -e
 
 
 
-export shiphomeurl=$WLSURL
-export jdkurl=$JAVAURL
-export wlsversion=$VERSIONWLS
-export jdkversion=$VERSIONJDK
+shiphomeurl=$WLSURL
+jdkurl=$JAVAURL
+wlsversion=$VERSIONWLS
+jdkversion=$VERSIONJDK
 
 
 #Function to create Weblogic Installation Location Template File for Silent Installation
@@ -192,15 +192,21 @@ JDK_PATH="/u01/app/jdk"
 WLS_PATH="/u01/app/wls"
 WL_HOME="/u01/app/wls/install/oracle/middleware/oracle_home/wlserver"
 BASE_DIR="/vagrant/installers"
+DOMAIN_PATH="/u01/domains"
 
-#create custom directory for setting up wls and jdk
+#create directory for setting up wls and jdk and to create domain 
 mkdir -p $JDK_PATH
 mkdir -p $WLS_PATH
+mkdir -p $DOMAIN_PATH
 
 chown -R $username:$groupname /u01/app
+chown -R $username:$groupname $DOMAIN_PATH
 
 cp $BASE_DIR/fmw_*.zip $WLS_PATH/
 cp $BASE_DIR/jdk-*.tar.gz $JDK_PATH/
+
+echo "unzip deploy tool "
+unzip -o $BASE_DIR/weblogic-deploy.zip -d $DOMAIN_PATH
 
 echo "extracting and setting up jdk..."
 tar -zxvf $JDK_PATH/jdk-*.tar.gz --directory $JDK_PATH
