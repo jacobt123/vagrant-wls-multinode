@@ -1,14 +1,7 @@
 #!/bin/bash
-
 set -e
 
-
-
-shiphomeurl=$WLSURL
-jdkurl=$JAVAURL
-wlsversion=$VERSIONWLS
-jdkversion=$VERSIONJDK
-
+hostfile=$HOSTFILE
 
 #Function to create Weblogic Installation Location Template File for Silent Installation
 function create_oraInstlocTemplate()
@@ -96,27 +89,6 @@ COLLECTOR_SUPPORTHUB_URL=
 EOF
 }
 
-#Function to create Weblogic Uninstallation Response Template File for Silent Uninstallation
-function create_oraUninstallResponseTemplate()
-{
-    echo "creating Uninstall Response Template..."
-
-    cat <<EOF >$WLS_PATH/silent-template/uninstall-response.template
-[ENGINE]
-
-#DO NOT CHANGE THIS.
-Response File Version=1.0.0.0.0
-
-[GENERIC]
-
-#This will be blank when there is nothing to be de-installed in distribution level
-SELECTED_DISTRIBUTION=WebLogic Server~[WLSVER]
-
-#The oracle home location. This can be an existing Oracle Home or a new Oracle Home
-ORACLE_HOME=[INSTALL_PATH]/oracle/middleware/oracle_home/
-
-EOF
-}
 
 #Install Weblogic Server using Silent Installation Templates
 function installWLS()
@@ -124,26 +96,13 @@ function installWLS()
     # Using silent file templates create silent installation required files
     echo "Creating silent files for installation from silent file templates..."
 
-    sed 's@\[INSTALL_PATH\]@'"$INSTALL_PATH"'@' ${SILENT_FILES_DIR}/uninstall-response.template > ${SILENT_FILES_DIR}/uninstall-response
-    sed -i 's@\[WLSVER\]@'"$WLS_VER"'@' ${SILENT_FILES_DIR}/uninstall-response
     sed 's@\[INSTALL_PATH\]@'"$INSTALL_PATH"'@' ${SILENT_FILES_DIR}/response.template > ${SILENT_FILES_DIR}/response
     sed 's@\[INSTALL_PATH\]@'"$INSTALL_PATH"'@' ${SILENT_FILES_DIR}/oraInst.loc.template > ${SILENT_FILES_DIR}/oraInst.loc
     sed -i 's@\[GROUP\]@'"$USER_GROUP"'@' ${SILENT_FILES_DIR}/oraInst.loc
 
     echo "Created files required for silent installation at $SILENT_FILES_DIR"
 
-    export UNINSTALL_SCRIPT=$INSTALL_PATH/oracle/middleware/oracle_home/oui/bin/deinstall.sh
-    if [ -f "$UNINSTALL_SCRIPT" ]
-    then
-            currentVer=`. $INSTALL_PATH/oracle/middleware/oracle_home/wlserver/server/bin/setWLSEnv.sh 1>&2 ; java weblogic.version |head -2`
-            echo "#########################################################################################################"
-            echo "Uninstalling already installed version :"$currentVer
-            runuser -l oracle -c "$UNINSTALL_SCRIPT -silent -responseFile ${SILENT_FILES_DIR}/uninstall-response"
-            sudo rm -rf $INSTALL_PATH/*
-            echo "#########################################################################################################"
-    fi
-
-    echo "---------------- Installing WLS ${WLS_JAR} ----------------"
+    echo " Installing WLS ${WLS_JAR}"
     
     
     if [[ "$jdkversion" =~ ^jdk1.8* ]]
@@ -162,19 +121,39 @@ function installWLS()
     # Check for successful installation and version requested
     if [[ $? == 0 ]];
     then
-      echo "Weblogic Server Installation is successful"
+      currentVer=`. $INSTALL_PATH/oracle/middleware/oracle_home/wlserver/server/bin/setWLSEnv.sh 1>&2 ; java weblogic.version |head -2| awk '{print $3;}'|tail -n +2`
+      echo "Weblogic Server $currentVer Installation is successful"
     else
 
       echo_stderr "Installation is not successful"
       exit 1
     fi
-    echo "#########################################################################################################"
-
 }
 
+function create_vm_banner()
+{
+    echo "Creating VM banner"
+    cat <<EOF > /etc/motd 
+    ***************************************************************
+    This VM provides a pre-installed Oracle Home with 
+    Oracle WebLogic Server $currentVer and JDK $jdkversion
 
-echo "=================================== START OF SETUP SCRIPT ====================="
-echo "=================================== SETUP SCRIPT - add user and group ====================="
+    ORACLE_HOME /u01/app/wls/install/oracle/middleware/oracle_home
+    JAVA_HOME   $JAVA_HOME
+    DOMAIN_HOME /u01/domains/
+
+    Switch to user oracle : sudo su - oracle
+    ***************************************************************
+EOF
+}
+
+function hostentries()
+{
+    IFS=';' read -ra HOSTS <<< "$hostfile"
+    for entry in "${HOSTS[@]}"; do
+      echo "$entry">>/etc/hosts
+    done
+}
 
 #add oracle group and user
 echo "Adding oracle user and group..."
@@ -186,7 +165,6 @@ mkdir /u01
 groupadd $groupname
 useradd -d ${user_home_dir} -g $groupname $username
 
-echo "=================================== SETUP SCRIPT - create directories ====================="
 
 JDK_PATH="/u01/app/jdk"
 WLS_PATH="/u01/app/wls"
@@ -202,18 +180,24 @@ mkdir -p $DOMAIN_PATH
 chown -R $username:$groupname /u01/app
 chown -R $username:$groupname $DOMAIN_PATH
 
-cp $BASE_DIR/fmw_*.zip $WLS_PATH/
-cp $BASE_DIR/jdk-*.tar.gz $JDK_PATH/
+cp $BASE_DIR/wls/fmw_*.zip $WLS_PATH/
+cp $BASE_DIR/jdk/jdk-*.tar.gz $JDK_PATH/
 
 echo "unzip deploy tool "
-unzip -o $BASE_DIR/weblogic-deploy.zip -d $DOMAIN_PATH
+unzip -o $BASE_DIR/deploytool/weblogic-deploy.zip -d $DOMAIN_PATH
 
 echo "extracting and setting up jdk..."
 tar -zxvf $JDK_PATH/jdk-*.tar.gz --directory $JDK_PATH
+rm $JDK_PATH/jdk-*.tar.gz
+
 chown -R $username:$groupname $JDK_PATH
 
-export JAVA_HOME=$JDK_PATH/$jdkversion
-export PATH=$JAVA_HOME/bin:$PATH
+jdkversion=$(ls $JDK_PATH)
+
+echo "JDK Version is $jdkversion"
+
+export JAVA_HOME="$JDK_PATH/$jdkversion"
+export PATH="$JAVA_HOME/bin:$PATH"
 
 echo "JAVA_HOME set to $JAVA_HOME"
 echo "PATH set to $PATH"
@@ -236,13 +220,14 @@ mkdir -p $SILENT_FILES_DIR
 chown -R $username:$groupname $WLS_PATH
 
 INSTALL_PATH="$WLS_PATH/install"
-WLS_JAR=$WLS_PATH"/fmw_"$wlsversion"_wls.jar"
+WLS_JAR=$(find $WLS_PATH -iname "*jar" -exec echo {} \;)
+
 
 mkdir -p $INSTALL_PATH
 chown -R $username:$groupname $INSTALL_PATH
 
 create_oraInstlocTemplate
 create_oraResponseTemplate
-create_oraUninstallResponseTemplate
-
 installWLS
+create_vm_banner
+hostentries

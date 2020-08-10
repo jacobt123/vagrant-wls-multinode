@@ -39,24 +39,19 @@ EOF
 
 function create_adminSetup()
 {
-#	mkdir -p $DOMAIN_PATH
-
-#	echo "created doamin directory $DOMAIN_PATH"
-
-#	unzip -o $BASE_DIR/weblogic-deploy.zip -d $DOMAIN_PATH
 	create_admin_model
 	chown -R $username:$groupname $DOMAIN_PATH
 	runuser -l oracle -c ". $oracleHome/oracle_common/common/bin/setWlstEnv.sh; $DOMAIN_PATH/weblogic-deploy/bin/createDomain.sh -oracle_home $oracleHome -domain_parent $DOMAIN_PATH  -domain_type WLS -model_file $DOMAIN_PATH/admin-domain.yaml"
 
 	echo "Created admin domain ......."
+        #runuser -l oracle -c "sudo cp ${DOMAIN_PATH}/${wlsDomainName}/security/SerializedSystemIni.dat ${SHARED_DIR}/"
+        sudo cp ${DOMAIN_PATH}/${wlsDomainName}/security/SerializedSystemIni.dat ${SHARED_DIR} 
 
 }
 
 #Function to setup admin boot properties
 function admin_boot_setup()
 {
- echo "Creating admin boot properties"
- #Create the boot.properties directory
  mkdir -p "$DOMAIN_PATH/$wlsDomainName/servers/admin/security"
  echo "username=$wlsUserName" > "$DOMAIN_PATH/$wlsDomainName/servers/admin/security/boot.properties"
  echo "password=$wlsPassword" >> "$DOMAIN_PATH/$wlsDomainName/servers/admin/security/boot.properties"
@@ -66,7 +61,6 @@ function admin_boot_setup()
 # Create systemctl service for nodemanager
 function create_nodemanager_service()
 {
- echo "Setting CrashRecoveryEnabled true at $DOMAIN_PATH/$wlsDomainName/nodemanager/nodemanager.properties"
  sed -i.bak -e 's/CrashRecoveryEnabled=false/CrashRecoveryEnabled=true/g'  $DOMAIN_PATH/$wlsDomainName/nodemanager/nodemanager.properties
  if [ $? != 0 ];
  then
@@ -155,8 +149,7 @@ function wait_for_admin()
 {
  #wait for admin to start
 count=1
-#export CHECK_URL="http://$wlsAdminURL/weblogic/ready"
-export CHECK_URL="http://127.0.0.1:7001/weblogic/ready"
+export CHECK_URL="http://$wlsAdminURL/weblogic/ready"
 echo "Ready App url ::::::: $CHECK_URL "
 status=`curl --insecure -ILs $CHECK_URL | tac | grep -m1 HTTP/1.1 | awk {'print $2'}`
 echo "Waiting for admin server to start"
@@ -182,25 +175,25 @@ do
 done
 }
 
-echo "Creating Admin Setup ......................."
+echo "Setting up admin node ......................."
 
 DOMAIN_PATH="/u01/domains"
 BASE_DIR="/vagrant/installers"
+SHARED_DIR="/vagrant/shared"
 username="oracle"
 groupname="oracle"
-wlsDomainName="clusterDomain"
-wlsUserName="system"
-wlsPassword="gumby1234"
+wlsDomainName=$DOMAINNAME
+wlsUserName=$WLUSER
+wlsPassword=$WLPASS
 wlsServerName="admin"
 wlsAdminHost=$ADMINURL
 oracleHome="/u01/app/wls/install/oracle/middleware/oracle_home"
 wlsAdminPort=7001
 wlsSSLAdminPort=7002
-wlsManagedPort=8001
 wlsAdminURL="$wlsAdminHost:$wlsAdminPort"
-wlsClusterName="cluster1"
+wlsClusterName=$CLUSTERNAME
 nmHost=`hostname`
-nmPort=5556
+nmPort=$NMPORT
 
 
 create_adminSetup
@@ -210,3 +203,4 @@ create_adminserver_service
 enabledAndStartNodeManagerService
 enableAndStartAdminServerService
 wait_for_admin
+

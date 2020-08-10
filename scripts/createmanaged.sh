@@ -1,13 +1,6 @@
+#!/bin/bash
 
-echo "=================================================> Managed Server Name :  $MANAGEDSERVER"
-echo "=================================================> Managed Server Port :  $MANAGEDSERVERPORT"
-echo "=================================================> ADMINURL $ADMINHOST"
-
-
-
-#sudo echo "$(/vagrant/shared/foo.txt)"
-
-#sudo cp /vagrant/shared/foo.txt / 
+set -e
 
 # Create managed server setup
 function create_managedSetup(){
@@ -16,15 +9,6 @@ function create_managedSetup(){
 
     DOMAIN_PATH="/u01/domains" 
     mkdir -p $DOMAIN_PATH 
-    
-
-#    cd $DOMAIN_PATH
-#    wget -q $WEBLOGIC_DEPLOY_TOOL
-#    if [[ $? != 0 ]]; then
-#       echo "Error : Downloading weblogic-deploy-tool failed"
-#       exit 1
-#    fi
-#    sudo unzip -o weblogic-deploy.zip -d $DOMAIN_PATH
     echo "Creating managed server model files"
     create_managed_model
     create_machine_model
@@ -37,11 +21,8 @@ function create_managedSetup(){
        echo "Error : Managed setup failed"
        exit 1
     fi
-#    wait_for_admin
-    
-    # For issue https://github.com/wls-eng/arm-oraclelinux-wls/issues/89
-#    getSerializedSystemIniFileFromShare
-    
+    sudo cp ${SHARED_DIR}/SerializedSystemIni.dat ${DOMAIN_PATH}/${wlsDomainName}/security/   
+    chown -R $username:$groupname ${DOMAIN_PATH}/${wlsDomainName}/security/
     echo "Adding machine to managed server $wlsServerName"
     runuser -l oracle -c ". $oracleHome/oracle_common/common/bin/setWlstEnv.sh; java $WLST_ARGS weblogic.WLST $DOMAIN_PATH/add-machine.py"
     if [[ $? != 0 ]]; then
@@ -68,7 +49,7 @@ domainInfo:
 topology:
    Name: "$wlsDomainName"
    Machine:
-     '$nmHost':
+     '$hostName':
          NodeManager:
              ListenAddress: "$nmHost"
              ListenPort: $nmPort
@@ -84,7 +65,7 @@ EOF
            ListenPort: $MANAGEDSERVERPORT
            Notes: "$wlsServerName managed server"
            Cluster: "$wlsClusterName"
-           Machine: "$nmHost"
+           Machine: "$hostName"
 EOF
     
     cat <<EOF >>$DOMAIN_PATH/managed-domain.yaml
@@ -103,8 +84,8 @@ connect('$wlsUserName','$wlsPassword','t3://$wlsAdminURL')
 edit("$wlsServerName")
 startEdit()
 cd('/')
-cmo.createMachine('$nmHost')
-cd('/Machines/$nmHost/NodeManager/$nmHost')
+cmo.createMachine('$hostName')
+cd('/Machines/$hostName/NodeManager/$hostName')
 cmo.setListenPort(int($nmPort))
 cmo.setListenAddress('$nmHost')
 cmo.setNMType('ssl')
@@ -127,15 +108,14 @@ startEdit()
 cd('/')
 cmo.createServer('$wlsServerName')
 cd('/Servers/$wlsServerName')
-cmo.setMachine(getMBean('/Machines/$nmHost'))
+cmo.setMachine(getMBean('/Machines/$hostName'))
 cmo.setCluster(getMBean('/Clusters/$wlsClusterName'))
-cmo.setListenAddress('$nmHost')
 cmo.setListenPort(int($wlsManagedPort))
 cmo.setListenPortEnabled(true)
 cd('/Servers/$wlsServerName/SSL/$wlsServerName')
 cmo.setEnabled(false)
 cd('/Servers/$wlsServerName//ServerStart/$wlsServerName')
-arguments = '-Dweblogic.Name=$wlsServerName  -Dweblogic.management.server=http://$wlsAdminURL'
+arguments = '-Dweblogic.security.SSL.ignoreHostnameVerification=true -Dweblogic.security.TrustKeyStore=DemoTrust -Dweblogic.Name=$wlsServerName  -Dweblogic.management.server=http://$wlsAdminURL'
 cmo.setArguments(arguments)
 save()
 resolve()
@@ -153,11 +133,6 @@ function create_nodemanager_service()
 {
  echo "Setting CrashRecoveryEnabled true at $DOMAIN_PATH/$wlsDomainName/nodemanager/nodemanager.properties"
  sed -i.bak -e 's/CrashRecoveryEnabled=false/CrashRecoveryEnabled=true/g'  $DOMAIN_PATH/$wlsDomainName/nodemanager/nodemanager.properties
- if [ $? != 0 ];
- then
-   echo "Warning : Failed in setting option CrashRecoveryEnabled=true. Continuing without the option."
-   mv $DOMAIN_PATH/nodemanager/nodemanager.properties.bak $DOMAIN_PATH/$wlsDomainName/nodemanager/nodemanager.properties
- fi
  chown -R $username:$groupname $DOMAIN_PATH/$wlsDomainName/nodemanager/nodemanager.properties*
  echo "Creating NodeManager service"
  cat <<EOF >/etc/systemd/system/wls_nodemanager.service
@@ -201,9 +176,10 @@ function enabledAndStartNodeManagerService()
  done
 }
 
-#This function to start managed server
+#function to start managed server
 function start_managed()
 {
+
     echo "Starting managed server $wlsServerName"
     cat <<EOF >$DOMAIN_PATH/start-server.py
 connect('$wlsUserName','$wlsPassword','t3://$wlsAdminURL')
@@ -218,34 +194,32 @@ chown -R $username:$groupname $DOMAIN_PATH
 runuser -l oracle -c ". $oracleHome/oracle_common/common/bin/setWlstEnv.sh; java $WLST_ARGS weblogic.WLST $DOMAIN_PATH/start-server.py"
 if [[ $? != 0 ]]; then
   echo "Error : Failed in starting managed server $wlsServerName"
-  exit 1
+ 
 fi
 }
 
 
 DOMAIN_PATH="/u01/domains"
 BASE_DIR="/vagrant/installers"
+SHARED_DIR="/vagrant/shared"
 username="oracle"
 groupname="oracle"
-wlsDomainName="clusterDomain"
-wlsUserName="system"
-wlsPassword="gumby1234"
+wlsDomainName=$DOMAINNAME
+wlsUserName=$WLUSER
+wlsPassword=$WLPASS
 wlsServerName=$MANAGEDSERVER
-wlsAdminHost=$ADMINURL
 oracleHome="/u01/app/wls/install/oracle/middleware/oracle_home"
-wlsAdminPort=7001
-wlsSSLAdminPort=7002
-wlsManagedPort=8001
+wlsManagedPort=$MANAGEDSERVERPORT
 wlsAdminURL="$ADMINHOST:7001"
-wlsClusterName="cluster1"
-nmHost=`hostname`
-nmPort=5556
+wlsClusterName=$CLUSTERNAME
+nmHost=$LOCALHOSTIP
+hostName=`hostname`
+nmPort=$NMPORT
 
-echo "==========================================================> create_managedSetup"
+echo "Setting up admin node ......................."
+
 create_managedSetup
-echo "==========================================================> create_nodemanager_service"
 create_nodemanager_service
-echo "==========================================================> enableAndStartNodeManagerService"
 enabledAndStartNodeManagerService
-##wait_for_admin
 start_managed
+
