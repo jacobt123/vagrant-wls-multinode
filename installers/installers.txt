@@ -1,1 +1,5 @@
 Installers should be placed in corresponding directories 
+
+JDK        - Download JDK from https://www.oracle.com/java/technologies/javase-downloads.html and place it in the jdk directory
+WebLogic   - Download WebLogic server installer from https://www.oracle.com/middleware/technologies/weblogic-server-installers-downloads.html and place it in the wls directory 
+deploytool - Download weblogic-deploy-tooling from https://github.com/oracle/weblogic-deploy-tooling/releases and place it in the deploytool directory
