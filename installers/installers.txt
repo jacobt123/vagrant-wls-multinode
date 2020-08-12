@@ -1,0 +1,1 @@
+Installers should be placed in corresponding directories 
