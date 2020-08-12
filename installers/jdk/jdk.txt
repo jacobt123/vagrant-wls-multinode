@@ -1,0 +1,9 @@
+Download JDK from https://www.oracle.com/java/technologies/javase-downloads.html and place it in this directory
+
+examples :
+
+     JDK8_u251
+https://download.oracle.com/otn/java/jdk/8u251-b08/3d5a2bb8f8d4428bbe94aed7ec7ae784/jdk-8u251-linux-x64.tar.gz
+
+    JDK11
+https://download.oracle.com/otn/java/jdk/11.0.7%2B8/8c7daf89330c48f0b9e32f57169f7bac/jdk-11.0.7_linux-x64_bin.tar.gz
