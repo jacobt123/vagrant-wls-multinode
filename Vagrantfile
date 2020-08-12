@@ -2,6 +2,7 @@
 # vi: set ft=ruby :
 
 require 'getoptlong'
+require "resolv"
 
 
 opts = GetoptLong.new(
@@ -30,6 +31,24 @@ var_nm_port=5556
 servers = {}
 hostfile = ""
 
+
+#validate the WebLogic password policy
+if ! /\d/.match(var_wls_pass)
+    puts "ERROR : The WebLogic domain password should contain a number and should be at least 8 characters long"
+    exit
+end
+
+if var_wls_pass.length < 8
+    puts "ERROR : The WebLogic domain password should contain a number and should be at least 8 characters long"
+    exit 
+end
+
+# Installing the vagrant-proxyconf plugin
+unless Vagrant.has_plugin?("vagrant-proxyconf")
+    puts 'Installing vagrant-proxyconf Plugin'
+    system('vagrant plugin install vagrant-proxyconf')
+end
+  
 
 opts.ordering=(GetoptLong::REQUIRE_ORDER)
 
@@ -70,11 +89,14 @@ puts "\n"
 puts "AS Port , #{var_as_port}"
 puts "\n"
 
+
+
 ip = IPAddr.new(var_admin_ip)
 (0..numberOfNodes).each do |i|
     i == 0 ? servers["admin"] =ip.to_s  : servers["managed#{i}"] =ip.to_s 
     ip = ip.succ
 end
+
 
 servers.each do |servername, ipaddress|
     hostfile.concat(ipaddress)
@@ -124,15 +146,22 @@ config.vm.define "admin" do |subconfig|
     subconfig.vm.box = BOX_NAME
     subconfig.vm.box_url = "#{BOX_URL}/#{BOX_NAME}.json"
     subconfig.vm.hostname = "admin"
-    subconfig.vm.network :private_network, ip: servers.fetch("admin")
-    subconfig.vm.network "forwarded_port", guest: 7001, host: 7001
+    subconfig.vm.provider :virtualbox do |vb| 
+	vb.memory = 2300
+        vb.cpus   = 2
+    end
+    
+
+    subconfig.vm.network :private_network, ip: servers.fetch("admin")    
+    subconfig.vm.network "forwarded_port", guest: var_as_port, host: var_as_port
     subconfig.vm.provision "shell", path: "scripts/createadmin.sh", env: {
-        "ADMINURL"    => servers.fetch("admin"),
-        "DOMAINNAME"  => var_domain_name,
-        "CLUSTERNAME" => var_cluster_name,
-        "WLUSER"      => var_wls_user,
-        "WLPASS"      => var_wls_pass,
-        "NMPORT"      => var_nm_port
+        "ADMINHOST"        => servers.fetch("admin"),
+        "ADMINSERVERPORT"  => var_as_port,
+        "DOMAINNAME"       => var_domain_name,
+        "CLUSTERNAME"      => var_cluster_name,
+        "WLUSER"           => var_wls_user,
+        "WLPASS"           => var_wls_pass,
+        "NMPORT"           => var_nm_port
     } 
 
 end
@@ -141,13 +170,18 @@ end
 config.vm.define "managed#{i}" do |subconfig|
     subconfig.vm.box = BOX_NAME
     subconfig.vm.box_url = "#{BOX_URL}/#{BOX_NAME}.json" 
+    subconfig.vm.hostname = "managed#{i}" 
+    subconfig.vm.provider :virtualbox do |vb|
+        vb.memory = 2300
+        vb.cpus   = 2
+    end 
 
-    subconfig.vm.hostname = "managed#{i}"
     subconfig.vm.network :private_network, ip: servers.fetch("managed#{i}")
     subconfig.vm.network "forwarded_port", guest: var_ms_port, host: var_ms_port 
     subconfig.vm.provision "shell", path: "scripts/createmanaged.sh", env: {
 	    "ADMINHOST"        => servers.fetch("admin"),
-        "MANAGEDSERVER"    => "managed#{i}",
+        "MANAGEDSERVER"    => "#{var_ms_prefix}".concat("#{i}"), 
+        "ADMINSERVERPORT"  => var_as_port,
         "MANAGEDSERVERPORT"=> var_ms_port ,
         "LOCALHOSTIP"      => servers.fetch("managed#{i}"),
         "DOMAINNAME"       => var_domain_name,
@@ -176,4 +210,3 @@ config.vm.provision "shell", path: "scripts/setup.sh", env: {
 }
 
 end
-

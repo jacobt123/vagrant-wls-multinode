@@ -2,6 +2,8 @@
 
 set -e
 
+echo "MANAGED SERVER NAME ===================================> $MANAGEDSERVER"
+
 # Create managed server setup
 function create_managedSetup(){
     echo "Creating Managed Server Setup"
@@ -210,7 +212,7 @@ wlsPassword=$WLPASS
 wlsServerName=$MANAGEDSERVER
 oracleHome="/u01/app/wls/install/oracle/middleware/oracle_home"
 wlsManagedPort=$MANAGEDSERVERPORT
-wlsAdminURL="$ADMINHOST:7001"
+wlsAdminURL="$ADMINHOST:$ADMINSERVERPORT"
 wlsClusterName=$CLUSTERNAME
 nmHost=$LOCALHOSTIP
 hostName=`hostname`

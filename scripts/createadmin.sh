@@ -25,7 +25,7 @@ topology:
         '$wlsClusterName':
              MigrationBasis: 'consensus'
    Server:
-        '$wlsServerName': 
+        '$wlsServerName':             
             ListenPort: $wlsAdminPort
             RestartDelaySeconds: 10
             SSL:
@@ -186,9 +186,9 @@ wlsDomainName=$DOMAINNAME
 wlsUserName=$WLUSER
 wlsPassword=$WLPASS
 wlsServerName="admin"
-wlsAdminHost=$ADMINURL
+wlsAdminHost=$ADMINHOST
 oracleHome="/u01/app/wls/install/oracle/middleware/oracle_home"
-wlsAdminPort=7001
+wlsAdminPort=$ADMINSERVERPORT
 wlsSSLAdminPort=7002
 wlsAdminURL="$wlsAdminHost:$wlsAdminPort"
 wlsClusterName=$CLUSTERNAME
