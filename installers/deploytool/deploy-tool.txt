@@ -1,0 +1,1 @@
+Download weblogic-deploy-tooling from https://github.com/oracle/weblogic-deploy-tooling/releases and place it in this directory
