@@ -3,6 +3,9 @@ This directory contains Vagrant build files to provision a n-node Oracle WebLogi
 
 # Prerequisites
 This project requires Vagrant and Oracle VM VirtualBox.
+  - Install [Oracle VM VirtualBox](https://www.virtualbox.org/wiki/Downloads)
+  - Install [Vagrant](https://vagrantup.com/)
+
 
 # Getting started
 
