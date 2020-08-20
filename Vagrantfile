@@ -2,14 +2,14 @@
 # vi: set ft=ruby :
 
 require 'getoptlong'
-require "resolv"
+
 
 
 opts = GetoptLong.new(
-    ["--nodes",          GetoptLong::OPTIONAL_ARGUMENT],
+    ["--clusternodes",   GetoptLong::OPTIONAL_ARGUMENT],
     ["--domain",         GetoptLong::OPTIONAL_ARGUMENT],
     ["--prefix",         GetoptLong::OPTIONAL_ARGUMENT],
-    ["--clustername",    GetoptLong::OPTIONAL_ARGUMENT],
+    ["--wlsclustername", GetoptLong::OPTIONAL_ARGUMENT],
     ["--wlsuser",        GetoptLong::OPTIONAL_ARGUMENT],
     ["--wlspassword",    GetoptLong::OPTIONAL_ARGUMENT],
     ["--portas",         GetoptLong::OPTIONAL_ARGUMENT],
@@ -54,13 +54,13 @@ opts.ordering=(GetoptLong::REQUIRE_ORDER)
 
 opts.each do |opt, arg|
   case opt
-    when '--nodes' || '--n'
+    when '--clusternodes'
         numberOfNodes= Integer(arg)
     when '--domain'
         var_domain_name=arg
     when '--prefix'
         var_ms_prefix=arg
-    when '--clustername'
+    when '--wlsclustername'
         var_cluster_name=arg
     when '--wlsuser'
         var_wls_user=arg
@@ -77,17 +77,17 @@ opts.each do |opt, arg|
     end
 end
 
-puts "\n"
-puts "Number of Nodes , #{numberOfNodes}"
-puts "\n"
-puts "Domain name , #{var_domain_name}"
-puts "\n"
-puts "MS Prefix , #{var_ms_prefix}"
-puts "\n"
-puts "MS Port , #{var_ms_port}"
-puts "\n"
-puts "AS Port , #{var_as_port}"
-puts "\n"
+#puts "\n"
+#puts "Number of Nodes , #{numberOfNodes}"
+#puts "\n"
+#puts "Domain name , #{var_domain_name}"
+#puts "\n"
+#puts "MS Prefix , #{var_ms_prefix}"
+#puts "\n"
+#puts "MS Port , #{var_ms_port}"
+#puts "\n"
+#puts "AS Port , #{var_as_port}"
+#puts "\n"
 
 
 
@@ -122,13 +122,13 @@ no_proxy_list =""
 
 
 if Vagrant.has_plugin?("vagrant-proxyconf")
-    puts "getting Proxy Configuration from Host..."
+#    puts "getting Proxy Configuration from Host..."
 if ENV["http_proxy"]
-    puts "http_proxy: " + ENV["http_proxy"]
+#    puts "http_proxy: " + ENV["http_proxy"]
     config.proxy.http     = ENV["http_proxy"]
 end
 if ENV["https_proxy"]
-    puts "https_proxy: " + ENV["https_proxy"]
+#    puts "https_proxy: " + ENV["https_proxy"]
     config.proxy.https    = ENV["https_proxy"]
 end
 if ENV["no_proxy"]
@@ -137,7 +137,7 @@ if ENV["no_proxy"]
         no_proxy_list.concat(",")
         no_proxy_list.concat(ipaddress)
     end
-    puts "no_proxy: " + no_proxy_list
+#    puts "no_proxy: " + no_proxy_list
     config.proxy.no_proxy = no_proxy_list 
 end
 end
@@ -175,7 +175,11 @@ config.vm.define "managed#{i}" do |subconfig|
         vb.memory = 2300
         vb.cpus   = 2
     end 
-
+    subconfig.trigger.before :destroy do |trigger|
+        trigger.name = "Before destroy trigger"
+        trigger.info = "Shutting down server and remove server and machine from configuration before destroy"
+        trigger.run_remote = {path: "scripts/destroy.sh"} 
+    end
     subconfig.vm.network :private_network, ip: servers.fetch("managed#{i}")
     subconfig.vm.network "forwarded_port", guest: var_ms_port, host: var_ms_port 
     subconfig.vm.provision "shell", path: "scripts/createmanaged.sh", env: {
@@ -194,19 +198,9 @@ config.vm.define "managed#{i}" do |subconfig|
 end
 end
 
-config.vm.provision "shell", inline: <<-SHELL
-    echo "Installing zip unzip wget rng-tools"
-    yum install -y zip unzip wget rng-tools
-    echo "Setting up rngd utils as a service"
-    systemctl enable rngd 
-    systemctl status rngd
-    systemctl start rngd
-    systemctl status rngd
-
-SHELL
-
 config.vm.provision "shell", path: "scripts/setup.sh", env: {
     "HOSTFILE"        => hostfile
 }
 
 end
+

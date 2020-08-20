@@ -175,11 +175,12 @@ do
 done
 }
 
-echo "Setting up admin node ......................."
+
 
 DOMAIN_PATH="/u01/domains"
 BASE_DIR="/vagrant/installers"
 SHARED_DIR="/vagrant/shared"
+SCRIPTS="/u01/app/scripts"
 username="oracle"
 groupname="oracle"
 wlsDomainName=$DOMAINNAME
@@ -195,12 +196,16 @@ wlsClusterName=$CLUSTERNAME
 nmHost=`hostname`
 nmPort=$NMPORT
 
-
-create_adminSetup
-create_nodemanager_service
-admin_boot_setup
-create_adminserver_service
-enabledAndStartNodeManagerService
-enableAndStartAdminServerService
-wait_for_admin
+if [ ! -f $SCRIPTS/VAGRANT_PROVISIONER_MARKER ]
+then 
+  echo "Setting up admin node ......................."
+  create_adminSetup
+  create_nodemanager_service
+  admin_boot_setup
+  create_adminserver_service
+  enabledAndStartNodeManagerService
+  enableAndStartAdminServerService
+  wait_for_admin
+  touch $SCRIPTS/VAGRANT_PROVISIONER_MARKER
+fi
 

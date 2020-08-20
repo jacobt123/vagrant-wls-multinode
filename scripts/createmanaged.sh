@@ -2,8 +2,6 @@
 
 set -e
 
-echo "MANAGED SERVER NAME ===================================> $MANAGEDSERVER"
-
 # Create managed server setup
 function create_managedSetup(){
     echo "Creating Managed Server Setup"
@@ -200,10 +198,49 @@ if [[ $? != 0 ]]; then
 fi
 }
 
+#function to create shutdown py script
+function create_shutdown_script()
+{
+    echo "Creating shutdown script "
+    cat <<EOF >$DOMAIN_PATH/shutdown.py
+connect('$wlsUserName','$wlsPassword','t3://$wlsAdminURL')
+domainRuntime()
+cd ('/ServerLifeCycleRuntimes/$wlsServerName')
+cmo.shutdown()
+disconnect() 
+EOF
+chown -R $username:$groupname $DOMAIN_PATH
+}
+
+#function to remove node py script
+function create_removenode_script()
+{
+    echo "Creating remove node script "
+    cat <<EOF >$DOMAIN_PATH/removenode.py
+connect('$wlsUserName','$wlsPassword','t3://$wlsAdminURL')
+edit("$wlsServerName")
+startEdit()
+editService.getConfigurationManager().removeReferencesToBean(getMBean('/MigratableTargets/$wlsServerName (migratable)'))
+cd('/')
+cmo.destroyMigratableTarget(getMBean('/MigratableTargets/$wlsServerName (migratable)'))
+editService.getConfigurationManager().removeReferencesToBean(getMBean('/Servers/$wlsServerName'))
+cd('/')
+cmo.destroyServer(getMBean('/Servers/$wlsServerName'))
+editService.getConfigurationManager().removeReferencesToBean(getMBean('/Machines/$wlsServerName'))
+cmo.destroyMachine(getMBean('/Machines/$wlsServerName'))
+save()
+resolve()
+activate()
+destroyEditSession("$wlsServerName")
+disconnect() 
+EOF
+chown -R $username:$groupname $DOMAIN_PATH
+}
 
 DOMAIN_PATH="/u01/domains"
 BASE_DIR="/vagrant/installers"
 SHARED_DIR="/vagrant/shared"
+SCRIPTS="/u01/app/scripts"
 username="oracle"
 groupname="oracle"
 wlsDomainName=$DOMAINNAME
@@ -218,10 +255,15 @@ nmHost=$LOCALHOSTIP
 hostName=`hostname`
 nmPort=$NMPORT
 
-echo "Setting up admin node ......................."
-
-create_managedSetup
-create_nodemanager_service
-enabledAndStartNodeManagerService
-start_managed
+if [ ! -f $SCRIPTS/VAGRANT_PROVISIONER_MARKER ]
+then 
+    echo "Setting up managed node ......................."
+    create_shutdown_script
+    create_removenode_script
+    create_managedSetup
+    create_nodemanager_service
+    enabledAndStartNodeManagerService
+    start_managed
+    touch $SCRIPTS/VAGRANT_PROVISIONER_MARKER
+fi
 

@@ -2,6 +2,17 @@
 set -e
 
 hostfile=$HOSTFILE
+SCRIPTS="/u01/app/scripts"
+JDK_PATH="/u01/app/jdk"
+WLS_PATH="/u01/app/wls"
+WL_HOME="/u01/app/wls/install/oracle/middleware/oracle_home/wlserver"
+BASE_DIR="/vagrant/installers"
+DOMAIN_PATH="/u01/domains"
+groupname="oracle"
+username="oracle"
+user_home_dir="/u01/oracle"
+USER_GROUP=${groupname}
+INSTALL_PATH="$WLS_PATH/install"
 
 #Function to create Weblogic Installation Location Template File for Silent Installation
 function create_oraInstlocTemplate()
@@ -157,79 +168,80 @@ function hostentries()
     done
 }
 
-#add oracle group and user
-echo "Adding oracle user and group..."
-groupname="oracle"
-username="oracle"
-user_home_dir="/u01/oracle"
-USER_GROUP=${groupname}
-mkdir /u01
-groupadd $groupname
-useradd -d ${user_home_dir} -g $groupname $username
+if [ ! -f $SCRIPTS/VAGRANT_PROVISIONER_MARKER ]
+then 
+    echo "Installing zip unzip wget rng-tools"
+    yum install -y zip unzip wget rng-tools
+    echo "Setting up rngd utils as a service"
+    sudo systemctl enable rngd 
+    sudo systemctl start rngd
+    sudo systemctl status rngd
+
+    #add oracle group and user
+    echo "Adding oracle user and group..."
+    mkdir /u01
+    groupadd $groupname
+    useradd -d ${user_home_dir} -g $groupname $username
+    #create directory for setting up wls and jdk and to create domain 
+    mkdir -p $JDK_PATH
+    mkdir -p $WLS_PATH
+    mkdir -p $DOMAIN_PATH
+    mkdir -p $SCRIPTS
+
+    chown -R $username:$groupname /u01/app
+    chown -R $username:$groupname $DOMAIN_PATH
+
+    cp $BASE_DIR/wls/fmw_*.zip $WLS_PATH/
+    cp $BASE_DIR/jdk/jdk-*.tar.gz $JDK_PATH/
+
+    echo "unzip deploy tool "
+    unzip -o $BASE_DIR/deploytool/weblogic-deploy.zip -d $DOMAIN_PATH
+
+    echo "extracting and setting up jdk..."
+    tar -zxvf $JDK_PATH/jdk-*.tar.gz --directory $JDK_PATH
+    rm $JDK_PATH/jdk-*.tar.gz
+
+    chown -R $username:$groupname $JDK_PATH
+
+    jdkversion=$(ls $JDK_PATH)
+
+    echo "JDK Version is $jdkversion"
+
+    export JAVA_HOME="$JDK_PATH/$jdkversion"
+    export PATH="$JAVA_HOME/bin:$PATH"
+
+    echo "JAVA_HOME set to $JAVA_HOME"
+    echo "PATH set to $PATH"
+
+    java -version
+
+    if [ $? == 0 ];
+    then
+        echo "JAVA HOME set succesfully."
+    else
+        echo_stderr "Failed to set JAVA_HOME. Please check logs and re-run the setup"
+        exit 1
+    fi
+
+    echo "unzipping wls install archive..."
+    unzip -o $WLS_PATH/fmw_*.zip -d $WLS_PATH
+
+    SILENT_FILES_DIR=$WLS_PATH/silent-template
+    mkdir -p $SILENT_FILES_DIR
+    chown -R $username:$groupname $WLS_PATH
+
+    WLS_JAR=$(find $WLS_PATH -iname "*jar" -exec echo {} \;)
 
 
-JDK_PATH="/u01/app/jdk"
-WLS_PATH="/u01/app/wls"
-WL_HOME="/u01/app/wls/install/oracle/middleware/oracle_home/wlserver"
-BASE_DIR="/vagrant/installers"
-DOMAIN_PATH="/u01/domains"
+    mkdir -p $INSTALL_PATH
+    chown -R $username:$groupname $INSTALL_PATH
 
-#create directory for setting up wls and jdk and to create domain 
-mkdir -p $JDK_PATH
-mkdir -p $WLS_PATH
-mkdir -p $DOMAIN_PATH
+    create_oraInstlocTemplate
+    create_oraResponseTemplate
+    installWLS
+    create_vm_banner
 
-chown -R $username:$groupname /u01/app
-chown -R $username:$groupname $DOMAIN_PATH
+fi 
 
-cp $BASE_DIR/wls/fmw_*.zip $WLS_PATH/
-cp $BASE_DIR/jdk/jdk-*.tar.gz $JDK_PATH/
-
-echo "unzip deploy tool "
-unzip -o $BASE_DIR/deploytool/weblogic-deploy.zip -d $DOMAIN_PATH
-
-echo "extracting and setting up jdk..."
-tar -zxvf $JDK_PATH/jdk-*.tar.gz --directory $JDK_PATH
-rm $JDK_PATH/jdk-*.tar.gz
-
-chown -R $username:$groupname $JDK_PATH
-
-jdkversion=$(ls $JDK_PATH)
-
-echo "JDK Version is $jdkversion"
-
-export JAVA_HOME="$JDK_PATH/$jdkversion"
-export PATH="$JAVA_HOME/bin:$PATH"
-
-echo "JAVA_HOME set to $JAVA_HOME"
-echo "PATH set to $PATH"
-
-java -version
-
-if [ $? == 0 ];
-then
-    echo "JAVA HOME set succesfully."
-else
-    echo_stderr "Failed to set JAVA_HOME. Please check logs and re-run the setup"
-    exit 1
-fi
-
-echo "unzipping wls install archive..."
-unzip -o $WLS_PATH/fmw_*.zip -d $WLS_PATH
-
-SILENT_FILES_DIR=$WLS_PATH/silent-template
-mkdir -p $SILENT_FILES_DIR
-chown -R $username:$groupname $WLS_PATH
-
-INSTALL_PATH="$WLS_PATH/install"
-WLS_JAR=$(find $WLS_PATH -iname "*jar" -exec echo {} \;)
-
-
-mkdir -p $INSTALL_PATH
-chown -R $username:$groupname $INSTALL_PATH
-
-create_oraInstlocTemplate
-create_oraResponseTemplate
-installWLS
-create_vm_banner
 hostentries
+
