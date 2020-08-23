@@ -178,6 +178,7 @@ config.vm.define "managed#{i}" do |subconfig|
     subconfig.trigger.before :destroy do |trigger|
         trigger.name = "Before destroy trigger"
         trigger.info = "Shutting down server and remove server and machine from configuration before destroy"
+        trigger.info = "Please ensure the VM is up and running"
         trigger.run_remote = {path: "scripts/destroy.sh"} 
     end
     subconfig.vm.network :private_network, ip: servers.fetch("managed#{i}")

@@ -11,9 +11,7 @@ function create_managedSetup(){
     mkdir -p $DOMAIN_PATH 
     echo "Creating managed server model files"
     create_managed_model
-    create_machine_model
-    create_ms_server_model
-    
+    create_machine_server
     echo "Completed managed server model files"
     chown -R $username:$groupname $DOMAIN_PATH
     runuser -l oracle -c ". $oracleHome/oracle_common/common/bin/setWlstEnv.sh; $DOMAIN_PATH/weblogic-deploy/bin/createDomain.sh -oracle_home $oracleHome -domain_parent $DOMAIN_PATH  -domain_type WLS -model_file $DOMAIN_PATH/managed-domain.yaml"
@@ -23,16 +21,10 @@ function create_managedSetup(){
     fi
     sudo cp ${SHARED_DIR}/SerializedSystemIni.dat ${DOMAIN_PATH}/${wlsDomainName}/security/   
     chown -R $username:$groupname ${DOMAIN_PATH}/${wlsDomainName}/security/
-    echo "Adding machine to managed server $wlsServerName"
-    runuser -l oracle -c ". $oracleHome/oracle_common/common/bin/setWlstEnv.sh; java $WLST_ARGS weblogic.WLST $DOMAIN_PATH/add-machine.py"
+    echo "Adding machine $hostName and managed server $wlsServerName"
+    runuser -l oracle -c ". $oracleHome/oracle_common/common/bin/setWlstEnv.sh; java $WLST_ARGS weblogic.WLST $DOMAIN_PATH/add-node.py"
     if [[ $? != 0 ]]; then
-         echo "Error : Adding machine for managed server $wlsServerName failed"
-         exit 1
-    fi
-    echo "Adding managed server $wlsServerName"
-    runuser -l oracle -c ". $oracleHome/oracle_common/common/bin/setWlstEnv.sh; java $WLST_ARGS weblogic.WLST $DOMAIN_PATH/add-server.py"
-    if [[ $? != 0 ]]; then
-         echo "Error : Adding server $wlsServerName failed"
+         echo "Error : Adding machine and managed server $wlsServerName failed"
          exit 1
     fi
 }
@@ -75,13 +67,58 @@ EOF
 EOF
 }
 
+
 #This function to add machine for a given managed server
-function create_machine_model()
+function create_machine_server()
 {
-    echo "Creating machine name model for managed server $wlsServerName"
-    cat <<EOF >$DOMAIN_PATH/add-machine.py
+    echo "Creating script to add machine and managed server $wlsServerName"
+    cat <<EOF >$DOMAIN_PATH/add-node.py
+import tempfile
+import os
+wlstOut = tempfile.mktemp(suffix="_wlstoutput.txt")
+redirect(wlstOut,"false")
+
+
 connect('$wlsUserName','$wlsPassword','t3://$wlsAdminURL')
-edit("$wlsServerName")
+try:
+    cd('/Servers/$wlsServerName')
+    stopRedirect()
+    print 'Server $wlsServerName already exists. Removing it'
+    domainRuntime()
+    cd ('/ServerLifeCycleRuntimes/$wlsServerName')
+    serverState=cmo.getState()
+    if serverState=='RUNNING':
+        cmo.shutdown()
+    edit("$wlsServerName-remove")
+    startEdit()
+    editService.getConfigurationManager().removeReferencesToBean(getMBean('/MigratableTargets/$wlsServerName (migratable)'))
+    cd('/')
+    cmo.destroyMigratableTarget(getMBean('/MigratableTargets/$wlsServerName (migratable)'))
+    editService.getConfigurationManager().removeReferencesToBean(getMBean('/Servers/$wlsServerName'))
+    cd('/')
+    cmo.destroyServer(getMBean('/Servers/$wlsServerName'))
+    save()
+    resolve()
+    activate()
+    destroyEditSession("$wlsServerName-remove")
+except:
+    stopRedirect()
+    print 'Server does not exist create it here '
+try:
+    cd('/Machines/$hostName')
+    stopRedirect()
+    print 'Machine $hostName already exists. Removing it'
+    edit("$hostName-remove")
+    startEdit()
+    editService.getConfigurationManager().removeReferencesToBean(getMBean('/Machines/$hostName'))
+    cmo.destroyMachine(getMBean('/Machines/$hostName'))
+    save()
+    resolve()
+    activate()
+    destroyEditSession("$hostName-remove")
+except:
+    print 'Machine does not exist create it here '
+edit("$hostName-add")
 startEdit()
 cd('/')
 cmo.createMachine('$hostName')
@@ -89,41 +126,27 @@ cd('/Machines/$hostName/NodeManager/$hostName')
 cmo.setListenPort(int($nmPort))
 cmo.setListenAddress('$nmHost')
 cmo.setNMType('ssl')
-save()
-resolve()
-activate()
-destroyEditSession("$wlsServerName")
-disconnect()
-EOF
-}
-
-#This function to add managed serverto admin node
-function create_ms_server_model()
-{
-    echo "Creating managed server $wlsServerName model"
-    cat <<EOF >$DOMAIN_PATH/add-server.py
-connect('$wlsUserName','$wlsPassword','t3://$wlsAdminURL')
-edit("$wlsServerName")
-startEdit()
 cd('/')
 cmo.createServer('$wlsServerName')
 cd('/Servers/$wlsServerName')
-cmo.setMachine(getMBean('/Machines/$hostName'))
 cmo.setCluster(getMBean('/Clusters/$wlsClusterName'))
+cmo.setMachine(getMBean('/Machines/$hostName'))
 cmo.setListenPort(int($wlsManagedPort))
 cmo.setListenPortEnabled(true)
 cd('/Servers/$wlsServerName/SSL/$wlsServerName')
 cmo.setEnabled(false)
 cd('/Servers/$wlsServerName//ServerStart/$wlsServerName')
-arguments = '-Dweblogic.security.SSL.ignoreHostnameVerification=true -Dweblogic.security.TrustKeyStore=DemoTrust -Dweblogic.Name=$wlsServerName  -Dweblogic.management.server=http://$wlsAdminURL'
+arguments = '-Dweblogic.security.SSL.ignoreHostnameVerification=true -Dweblogic.security.TrustKeyStore=DemoTrust -Dweblogic.Name=$wlsServerName -Dweblogic.management.server=http://$wlsAdminURL'
 cmo.setArguments(arguments)
 save()
 resolve()
 activate()
-destroyEditSession("$wlsServerName")
+destroyEditSession("$hostName-add")
 nmEnroll('$DOMAIN_PATH/$wlsDomainName','$DOMAIN_PATH/$wlsDomainName/nodemanager')
 nmGenBootStartupProps('$wlsServerName')
 disconnect()
+os.remove(wlstOut)
+exit()
 EOF
 }
 
@@ -198,26 +221,28 @@ if [[ $? != 0 ]]; then
 fi
 }
 
-#function to create shutdown py script
-function create_shutdown_script()
-{
-    echo "Creating shutdown script "
-    cat <<EOF >$DOMAIN_PATH/shutdown.py
-connect('$wlsUserName','$wlsPassword','t3://$wlsAdminURL')
-domainRuntime()
-cd ('/ServerLifeCycleRuntimes/$wlsServerName')
-cmo.shutdown()
-disconnect() 
-EOF
-chown -R $username:$groupname $DOMAIN_PATH
-}
 
 #function to remove node py script
 function create_removenode_script()
 {
     echo "Creating remove node script "
     cat <<EOF >$DOMAIN_PATH/removenode.py
-connect('$wlsUserName','$wlsPassword','t3://$wlsAdminURL')
+import tempfile
+import os
+wlstOut = tempfile.mktemp(suffix="_wlstoutput.txt")
+redirect(wlstOut,"false")
+
+try:
+    connect('$wlsUserName','$wlsPassword','t3://$wlsAdminURL')
+    stopRedirect()
+    print "Successfully connected to the admin server"
+except:
+    stopRedirect()
+    print "Error connecing to the admin server. Skipping the cleanup "
+    exit()
+domainRuntime()
+cd ('/ServerLifeCycleRuntimes/$wlsServerName')
+cmo.shutdown()
 edit("$wlsServerName")
 startEdit()
 editService.getConfigurationManager().removeReferencesToBean(getMBean('/MigratableTargets/$wlsServerName (migratable)'))
@@ -232,7 +257,9 @@ save()
 resolve()
 activate()
 destroyEditSession("$wlsServerName")
-disconnect() 
+disconnect()
+os.remove(wlstOut)
+exit() 
 EOF
 chown -R $username:$groupname $DOMAIN_PATH
 }
@@ -258,7 +285,6 @@ nmPort=$NMPORT
 if [ ! -f $SCRIPTS/VAGRANT_PROVISIONER_MARKER ]
 then 
     echo "Setting up managed node ......................."
-    create_shutdown_script
     create_removenode_script
     create_managedSetup
     create_nodemanager_service
