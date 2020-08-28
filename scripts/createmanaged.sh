@@ -58,6 +58,9 @@ EOF
            Notes: "$wlsServerName managed server"
            Cluster: "$wlsClusterName"
            Machine: "$hostName"
+           SSL:
+               Enabled: true
+               ListenPort: $wlsManagedSSLPort
 EOF
     
     cat <<EOF >>$DOMAIN_PATH/managed-domain.yaml
@@ -134,7 +137,8 @@ cmo.setMachine(getMBean('/Machines/$hostName'))
 cmo.setListenPort(int($wlsManagedPort))
 cmo.setListenPortEnabled(true)
 cd('/Servers/$wlsServerName/SSL/$wlsServerName')
-cmo.setEnabled(false)
+cmo.setEnabled(true)
+cmo.setListenPort(int($wlsManagedSSLPort))
 cd('/Servers/$wlsServerName//ServerStart/$wlsServerName')
 arguments = '-Dweblogic.security.SSL.ignoreHostnameVerification=true -Dweblogic.security.TrustKeyStore=DemoTrust -Dweblogic.Name=$wlsServerName -Dweblogic.management.server=http://$wlsAdminURL'
 cmo.setArguments(arguments)
@@ -276,6 +280,7 @@ wlsPassword=$WLPASS
 wlsServerName=$MANAGEDSERVER
 oracleHome="/u01/app/wls/install/oracle/middleware/oracle_home"
 wlsManagedPort=$MANAGEDSERVERPORT
+wlsManagedSSLPort=$MANAGEDSERVERSSLPORT
 wlsAdminURL="$ADMINHOST:$ADMINSERVERPORT"
 wlsClusterName=$CLUSTERNAME
 nmHost=$LOCALHOSTIP

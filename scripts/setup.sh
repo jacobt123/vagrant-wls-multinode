@@ -191,7 +191,16 @@ then
     chown -R $username:$groupname /u01/app
     chown -R $username:$groupname $DOMAIN_PATH
 
-    cp $BASE_DIR/wls/fmw_*.zip $WLS_PATH/
+    if [ -e $BASE_DIR/wls/*.zip ]
+    then
+        cp $BASE_DIR/wls/*.zip $WLS_PATH/
+        echo "unzipping wls install archive..."
+        unzip -o $WLS_PATH/*.zip -d $WLS_PATH
+    else
+        cp $BASE_DIR/wls/*.jar $WLS_PATH/
+    fi
+
+    
     cp $BASE_DIR/jdk/jdk-*.tar.gz $JDK_PATH/
 
     echo "unzip deploy tool "
@@ -223,8 +232,6 @@ then
         exit 1
     fi
 
-    echo "unzipping wls install archive..."
-    unzip -o $WLS_PATH/fmw_*.zip -d $WLS_PATH
 
     SILENT_FILES_DIR=$WLS_PATH/silent-template
     mkdir -p $SILENT_FILES_DIR
