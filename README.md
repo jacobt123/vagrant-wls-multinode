@@ -29,6 +29,11 @@ vagrant --c=2 up
 ```
 vagrant --c=2 status 
 ```
+* Display a full list of guest ports mapped to the host machine ports for a particular machine (In this example we list ports for the machine named "managed1")
+
+```
+vagrant --c=2 port managed1
+```
 * SSH into one of the running machines (In this example we ssh into the machine named "managed1")
 
 ```
